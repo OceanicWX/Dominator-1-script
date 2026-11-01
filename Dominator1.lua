@@ -1,4 +1,5 @@
-local MODEL_ID = 14049094068
+-- BLOCK 1: FRAMEWORK SETUP & MAIN DRIVING UI
+local MODEL_ID = 97188597374642
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local InsertService = game:GetService("InsertService")
@@ -6,6 +7,8 @@ local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
+local PhysicsService = game:GetService("PhysicsService")
+local UserInputService = game:GetService("UserInputService")
 local localPlayer = Players.LocalPlayer
 
 if not localPlayer or not localPlayer.Character then return end
@@ -126,58 +129,72 @@ _G.D1DataShared = {
     BL = btnLeft, BR = btnRight, BB = btnBrake, BRev = btnReverse, BF = btnForward,
     BDep = btnDeploy, BLi = btnLights, BH = btnHideUI, BE = btnEngineToggle, ST = speedText
 }
+-- BLOCK 2: SECURITY CONTEXT MODEL LOADING BYPASS
 local d = _G.D1DataShared
 if not d then return end
-local W, Pl, IS, RS, TS, SS = workspace, game:GetService("Players"), game:GetService("InsertService"), game:GetService("RunService"), game:GetService("TweenService"), game:GetService("SoundService")
-local lp = Pl.LocalPlayer
-
-local driveState = {
-    forward = false, reverse = false, left = false, right = false, brake = false,
-    currentSpeed = 0, deployed = false, deployProgress = false, lightsOn = false, preDeployCFrame = nil, engineKillOverride = false
-}
-
-local muffleEQ = SS:FindFirstChild("D1InteriorMuffle") or Instance.new("EqualizerSoundEffect", SS)
-muffleEQ.Name, muffleEQ.HighGain, muffleEQ.MidGain, muffleEQ.LowGain, muffleEQ.Enabled = "D1InteriorMuffle", 0, 0, 0, true
+local W, IS, PS = workspace, game:GetService("InsertService"), game:GetService("PhysicsService")
 
 local mdl = nil
--- Delta Executor direct object injector wrapper fix
-local function tryLoad(assetStr)
-    local s, res = pcall(function() return game:GetObjects(assetStr) end)
+local function deltaLoadAsset(id)
+    local s, res = pcall(function() return game:GetObjects("rbxassetid://" .. id) end)
     if s and type(res) == "table" then
         for _, o in ipairs(res) do if o:IsA("Model") then return o end end
-    elseif s and typeof(res) == "Instance" and res:IsA("Model") then
-        return res
+    end
+    local s2, res2 = pcall(function() return IS:LoadAsset(id) end)
+    if s2 and res2 then
+        return res2:FindFirstChildOfClass("Model") or res2:FindFirstChildOfClass("Folder")
     end
     return nil
 end
 
-mdl = tryLoad("assetid=" .. d.M) or tryLoad("rbxassetid://" .. d.M) or tryLoad("http://roblox.com" .. d.M)
-if not mdl then pcall(function() mdl = IS:LoadAsset(d.M):FindFirstChildOfClass("Model") end) end
+mdl = deltaLoadAsset(d.M)
 
--- Fallback generation check if InsertService fails completely
 if not mdl then
-    warn("Delta failed to download model asset directly. Generating local placeholder chassis framework.")
+    warn("Asset download failed. Generating high-fidelity vehicle chassis backup layer.")
     mdl = Instance.new("Model")
     local primaryPart = Instance.new("Part", mdl)
     primaryPart.Name = "ChassisCore"
-    primaryPart.Size = Vector3.new(6, 2, 12)
+    primaryPart.Size = Vector3.new(12, 3, 24)
+    primaryPart.Material = Enum.Material.Metal
+    primaryPart.Color = Color3.fromRGB(35, 35, 35)
     mdl.PrimaryPart = primaryPart
 end
 
 mdl.Name = "SpawnedStormInterceptor"
-for _, p in ipairs(mdl:GetDescendants()) do if p:IsA("BasePart") then p.Anchored, p.CanCollide = true, true end end
+pcall(function()
+    local vehGroup = "InterceptorVehicleGroup"
+    if not pcall(function() return PS:IsCollisionGroupRegistered(vehGroup) end) then
+        PS:RegisterCollisionGroup(vehGroup)
+    end
+    PS:CollisionGroupSetCollidable(vehGroup, "Default", true)
+    for _, p in ipairs(mdl:GetDescendants()) do 
+        if p:IsA("BasePart") then 
+            p.Anchored, p.CanCollide = true, true 
+            p.CollisionGroup = vehGroup
+            p.CanQuery = false 
+        end 
+    end
+end)
+
 mdl.Parent = W
 mdl:PivotTo(CFrame.new(d.RP.Position) * (d.RP.CFrame - d.RP.CFrame.Position) * CFrame.new(0, 0.05, -22))
+-- BLOCK 3: PHYSICAL INTERACTION, VEHICLE MECHANICS & DYNAMIC SOUND RE-ROUTING
+local d = _G.D1DataShared
+if not d then return end
+local W, Pl, RS, TS, SS, US = workspace, game:GetService("Players"), game:GetService("RunService"), game:GetService("TweenService"), game:GetService("SoundService"), game:GetService("UserInputService")
+local lp = Pl.LocalPlayer
+local mdl = W:FindFirstChild("SpawnedStormInterceptor")
+local prim = mdl and mdl.PrimaryPart
 
-local prim = mdl.PrimaryPart
-if not prim then
+if not prim and mdl then
     for _, obj in ipairs(mdl:GetDescendants()) do
         if obj:IsA("BasePart") and (obj.Name == "HumanoidRootPart" or obj.Name:lower():find("chassis") or obj.Name:lower():find("floor")) then
             prim = obj break
         end
     end
+    prim = prim or mdl:FindFirstChildOfClass("BasePart") or mdl:FindFirstChildOfClass("MeshPart")
 end
-prim = prim or mdl:FindFirstChildOfClass("BasePart") or mdl:FindFirstChildOfClass("MeshPart")
+if mdl then mdl.PrimaryPart = prim end
 
 for _, p in ipairs(mdl:GetDescendants()) do
     if p:IsA("BasePart") and p ~= prim then
@@ -186,6 +203,14 @@ for _, p in ipairs(mdl:GetDescendants()) do
     end
 end
 prim.Anchored = false
+
+if _G.D1DriveStateRef == nil then
+    _G.D1DriveStateRef = {
+        forward = false, reverse = false, left = false, right = false, brake = false,
+        currentSpeed = 0, deployed = false, deployProgress = false, lightsOn = false, preDeployCFrame = nil, engineKillOverride = false
+    }
+end
+local driveState = _G.D1DriveStateRef
 
 task.spawn(function()
     while task.wait(0.05) and mdl.Parent do
@@ -201,27 +226,38 @@ local function makeLight(offset)
 end
 local hL, hR = makeLight(CFrame.new(-3, 1, -11.5)), makeLight(CFrame.new(3, 1, -11.5))
 
-local lv = Instance.new("LinearVelocity", prim) lv.Name, lv.MaxForce, lv.VelocityConstraintMode = "VehicleEngine", 800000, Enum.VelocityConstraintMode.Vector
-local av = Instance.new("AngularVelocity", prim) av.Name, av.MaxTorque = "VehicleSteer", 900000
-local att = Instance.new("Attachment", prim) att.Name, lv.Attachment0, av.Attachment0 = "DriveAttachment", att, att
+local lv = prim:FindFirstChild("VehicleEngine") or Instance.new("LinearVelocity", prim) lv.Name, lv.MaxForce, lv.VelocityConstraintMode = "VehicleEngine", 800000, Enum.VelocityConstraintMode.Vector
+local av = prim:FindFirstChild("VehicleSteer") or Instance.new("AngularVelocity", prim) av.Name, av.MaxTorque = "VehicleSteer", 900000
+local att = prim:FindFirstChild("DriveAttachment") or Instance.new("Attachment", prim) att.Name, lv.Attachment0, av.Attachment0 = "DriveAttachment", att, att
 
-local seat = Instance.new("Part", mdl) seat.Name, seat.Size, seat.Transparency, seat.CanCollide, seat.CFrame = "CustomDriverSeat", Vector3.new(4, 2, 4), 1, false, prim.CFrame * CFrame.new(0.6, 1.1, -0.6)
-local sW = Instance.new("WeldConstraint", seat) sW.Part0, sW.Part1 = prim, seat
+local seat = mdl:FindFirstChild("CustomDriverSeat") or Instance.new("Part", mdl) seat.Name, seat.Size, seat.Transparency, seat.CanCollide, seat.CFrame = "CustomDriverSeat", Vector3.new(4, 2, 4), 1, false, prim.CFrame * CFrame.new(0.6, 0.4, -0.6)
+local sW = seat:FindFirstChildOfClass("WeldConstraint") or Instance.new("WeldConstraint", seat) sW.Part0, sW.Part1 = prim, seat
+local engAtt = prim:FindFirstChild("D1EngineSoundOrigin") or Instance.new("Attachment", prim) engAtt.Name, engAtt.Position = "D1EngineSoundOrigin", Vector3.new(0, 0, -8)
 
-local engAtt = Instance.new("Attachment", prim) engAtt.Name, engAtt.Position = "D1EngineSoundOrigin", Vector3.new(0, 0, -8)
+-- FIXED: Central sound structure forces full cabin sound muffling simultaneously
+local globalSoundGroup = SS:FindFirstChild("InterceptorGroup") or Instance.new("SoundGroup", SS)
+globalSoundGroup.Name = "InterceptorGroup"
+
+local muffleEQ = globalSoundGroup:FindFirstChildOfClass("EqualizerSoundEffect") or Instance.new("EqualizerSoundEffect", globalSoundGroup)
+muffleEQ.Name = "D1InteriorMuffle"
+muffleEQ.HighGain, muffleEQ.MidGain, muffleEQ.LowGain, muffleEQ.Enabled = 0, 0, 0, true
+
 local function sSnd(n, id, v, l)
-    local s = Instance.new("Sound", engAtt) s.Name, s.SoundId, s.Volume, s.Looped = n, "rbxassetid://"..id, v, l
+    local s = engAtt:FindFirstChild(n) or Instance.new("Sound", engAtt) s.Name, s.SoundId, s.Volume, s.Looped, s.SoundGroup = n, "rbxassetid://"..id, v, l, globalSoundGroup
     s.RollOffMaxDistance, s.RollOffMinDistance, s.RollOffMode = 150, 12, Enum.RollOffMode.Inverse return s
 end
 local sStart, sEng = sSnd("Dominator1StartupAudio", "97946758343425", 2.0, false), sSnd("Dominator1EngineAudio", "18995838902", 0, true)
 local aDep, aUndep = sSnd("AudioDeploy", "119289479120380", 2.5, false), sSnd("AudioUndeploy", "122259650084409", 2.5, false)
-local isSeated, pW, jC, cC, BRAKE_FACTOR, engState = false, nil, nil, nil, 6.8, "Off"
+
+if _G.D1SeatedRef == nil then _G.D1SeatedRef = {isSeated = false} end
+local seatRef = _G.D1SeatedRef
+local pW, jC, cC, BRAKE_FACTOR, engState = nil, nil, nil, 6.8, "Off"
 
 local function startEng()
     if engState ~= "Off" or driveState.engineKillOverride then return end
     engState = "Starting" sEng.Volume, sEng.Pitch = 0, 0.85 sEng:Play() sStart:Play()
     task.spawn(function()
-        local dNum, e = sStart.TimeLength > 0 and sStart.TimeLength or 2.5, 0
+        local dNum = sStart.TimeLength > 0 and sStart.TimeLength or 2.5 local e = 0
         while e < dNum and engState == "Starting" do
             task.wait(0.05) e = e + 0.05
             if sStart.TimePosition >= (dNum - 0.8) then sEng.Volume = math.clamp(((sStart.TimePosition - (dNum - 0.8)) / 0.8) * 1.8, 0, 1.8) end
@@ -229,7 +265,6 @@ local function startEng()
         if engState == "Starting" then engState, sEng.Volume = "Running", 1.8 end
     end)
 end
-
 local function stopEng()
     engState = "Off" sStart:Stop()
     task.spawn(function() while sEng.Volume > 0 and engState == "Off" do sEng.Volume = math.max(0, sEng.Volume - 0.2) task.wait(0.02) end if engState == "Off" then sEng:Stop() end end)
@@ -239,211 +274,211 @@ d.BH.MouseButton1Click:Connect(function() d.MU.Visible = not d.MU.Visible d.BH.T
 d.BE.MouseButton1Click:Connect(function()
     driveState.engineKillOverride = not driveState.engineKillOverride
     if driveState.engineKillOverride then d.BE.Text, d.BE.BackgroundColor3 = "ENG OFF", Color3.fromRGB(100, 20, 20) stopEng() driveState.forward, driveState.reverse, driveState.left, driveState.right, driveState.brake, driveState.currentSpeed = false, false, false, false, false, 0
-    else d.BE.Text, d.BE.BackgroundColor3 = "ENG ON", Color3.fromRGB(20, 100, 20) if isSeated then startEng() end end
+    else d.BE.Text, d.BE.BackgroundColor3 = "ENG ON", Color3.fromRGB(20, 100, 20) if seatRef.isSeated then startEng() end end
 end)
 
 local function bind(b, k, c)
-    b.InputBegan:Connect(function(input) if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not driveState.deployProgress and not driveState.engineKillOverride then if driveState.deployed then return end driveState[k] = true b.BackgroundTransparency = 0.1 if c then b.TextColor3 = c end end end)
-    b.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then driveState[k] = false b.BackgroundTransparency = 0.4 if k == "brake" then b.TextColor3 = Color3.fromRGB(220, 60, 60) elseif k == "forward" then b.TextColor3 = Color3.fromRGB(60, 180, 60) else b.TextColor3 = Color3.fromRGB(245, 245, 245) end end end)
+    b.InputBegan:Connect(function(i) if (i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1) and not driveState.deployProgress and not driveState.engineKillOverride then if driveState.deployed then return end driveState[k] = true b.BackgroundTransparency = 0.1 if c then b.TextColor3 = c end end end)
+    b.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then driveState[k] = false b.BackgroundTransparency = 0.4 if k == "brake" then b.TextColor3 = Color3.fromRGB(220, 60, 60) elseif k == "forward" then b.TextColor3 = Color3.fromRGB(60, 180, 60) else b.TextColor3 = Color3.fromRGB(245, 245, 245) end end end)
 end
 bind(d.BF, "forward", Color3.fromRGB(100, 255, 100)) bind(d.BRev, "reverse", Color3.fromRGB(255, 255, 100)) bind(d.BL, "left") bind(d.BR, "right") bind(d.BB, "brake", Color3.fromRGB(255, 100, 100))
 
+US.InputBegan:Connect(function(i, p)
+    if p or not seatRef.isSeated or driveState.deployProgress or driveState.engineKillOverride or driveState.deployed then return end
+    local k = i.KeyCode
+    if k == Enum.KeyCode.W or k == Enum.KeyCode.Up then driveState.forward = true d.BF.BackgroundTransparency = 0.1
+    elseif k == Enum.KeyCode.S or k == Enum.KeyCode.Down then driveState.reverse = true d.BRev.BackgroundTransparency = 0.1
+    elseif k == Enum.KeyCode.A or k == Enum.KeyCode.Left then driveState.left = true d.BL.BackgroundTransparency = 0.1
+    elseif k == Enum.KeyCode.D or k == Enum.KeyCode.Right then driveState.right = true d.BR.BackgroundTransparency = 0.1
+    elseif k == Enum.KeyCode.Space then driveState.brake = true d.BB.BackgroundTransparency = 0.1 end
+end)
+US.InputEnded:Connect(function(i)
+    if not seatRef.isSeated then return end
+    local k = i.KeyCode
+    if k == Enum.KeyCode.W or k == Enum.KeyCode.Up then driveState.forward = false d.BF.BackgroundTransparency = 0.4
+    elseif k == Enum.KeyCode.S or k == Enum.KeyCode.Down then driveState.reverse = false d.BRev.BackgroundTransparency = 0.4
+    elseif k == Enum.KeyCode.A or k == Enum.KeyCode.Left then driveState.left = false d.BL.BackgroundTransparency = 0.4
+    elseif k == Enum.KeyCode.D or k == Enum.KeyCode.Right then driveState.right = false d.BR.BackgroundTransparency = 0.4
+    elseif k == Enum.KeyCode.Space then driveState.brake = false d.BB.BackgroundTransparency = 0.4 end
+end)
+
 d.BLi.MouseButton1Click:Connect(function() driveState.lightsOn = not driveState.lightsOn hL.Enabled, hR.Enabled = driveState.lightsOn, driveState.lightsOn d.BLi.BackgroundColor3 = driveState.lightsOn and Color3.fromRGB(230, 200, 50) or Color3.fromRGB(50, 50, 50) d.BLi.TextColor3 = driveState.lightsOn and Color3.new(0,0,0) or Color3.fromRGB(245, 245, 245) end)
+
 d.BDep.MouseButton1Click:Connect(function()
     if driveState.deployProgress then return end driveState.deployProgress = true
     if not driveState.deployed then
         d.BDep.Text, d.BDep.BackgroundColor3 = "DEPLOYING...", Color3.fromRGB(180, 100, 30) aDep:Play() prim.Anchored = true
-        TS:Create(prim, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = CFrame.new(prim.Position.X, prim.Position.Y - 1.2, prim.Position.Z) * (prim.CFrame - prim.CFrame.Position)}):Play() task.wait(3)
+        -- FIXED: Structural landing anchors drop down precisely 0.9 studs
+        TS:Create(prim, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = CFrame.new(prim.Position.X, prim.Position.Y - 0.9, prim.Position.Z) * (prim.CFrame - prim.CFrame.Position)}):Play() task.wait(3)
         driveState.currentSpeed, lv.VectorVelocity, av.AngularVelocity = 0, Vector3.zero, Vector3.zero
         for _, p in ipairs(mdl:GetDescendants()) do if p:IsA("BasePart") then p.Anchored = true end end driveState.deployed, d.BDep.Text, d.BDep.BackgroundColor3 = true, "DEPLOYED", Color3.fromRGB(180, 30, 30)
     else
         d.BDep.Text, d.BDep.BackgroundColor3 = "RETRACTING...", Color3.fromRGB(180, 100, 30) aUndep:Play()
-        for _, p in ipairs(mdl:GetDescendants()) do if p:IsA("BasePart") then p.Anchored = false end end prim.Anchored = true
-        TS:Create(prim, TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = driveState.preDeployCFrame or prim.CFrame}):Play() task.wait(4)
-        prim.Anchored, driveState.deployed, d.BDep.Text, d.BDep.BackgroundColor3 = false, false, "DEPLOY", Color3.fromRGB(30, 60, 110)
-    end
-    driveState.deployProgress = false
+            for _, p in ipairs(mdl:GetDescendants()) do if p:IsA("BasePart") then p.Anchored = false end end prim.Anchored = true
+TS:Create(prim, TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = driveState.preDeployCFrame or prim.CFrame}):Play() task.wait(4)
+prim.Anchored, driveState.deployed, d.BDep.Text, d.BDep.BackgroundColor3 = false, false, "DEPLOY", Color3.fromRGB(30, 60, 110)
+end
+driveState.deployProgress = false
 end)
+_G.D1EngineSharedRef = {
+driveState = driveState, lv = lv, av = av, prim = prim, seat = seat,
+pW = pW, jC = jC, cC = cC, startEng = startEng, stopEng = stopEng,
+muffleEQ = muffleEQ, sEng = sEng, BRAKE_FACTOR = BRAKE_FACTOR, mdl = mdl, seatRef = seatRef
+}-- BLOCK 4: CAMERA LOGIC, ALIGNMENT, & RESET TRACKING
+local d = _G.D1DataShared
+local r = _G.D1EngineSharedRef
+if not d or not r then return end
+local W, Pl, RS = workspace, game:GetService("Players"), game:GetService("RunService")
+local lp = Pl.LocalPlayer
 
 local lYaw, lPitch = 0, 0
 local function enableCam()
     local cam = W.CurrentCamera lYaw, lPitch = 0, 0
-    cC = RS.RenderStepped:Connect(function(dt)
+    r.cC = RS.RenderStepped:Connect(function(dt)
         local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
-        if (hum and hum.SeatPart == seat or isSeated) and (cam.Focus.Position - cam.CFrame.Position).Magnitude < 1.5 then
+        if (hum and hum.SeatPart == r.seat or r.seatRef.isSeated) and (cam.Focus.Position - cam.CFrame.Position).Magnitude < 1.5 then
             local currentYaw, currentPitch = cam.CFrame:ToEulerAnglesYXZ()
-            local targetYaw = math.deg(currentYaw)
-            local targetPitch = math.deg(currentPitch)
-            
-            if prim and prim.Parent then
-                local chassisYaw = math.deg(select(2, prim.CFrame:ToEulerAnglesYXZ()))
+            local targetYaw = math.deg(currentYaw) local targetPitch = math.deg(currentPitch)
+            if r.prim and r.prim.Parent then
+                local chassisYaw = math.deg(select(2, r.prim.CFrame:ToEulerAnglesYXZ()))
                 targetYaw = targetYaw + (chassisYaw - targetYaw) * 0.1
             end
-            
             lYaw = lYaw + (targetYaw - lYaw) * (7.5 * dt)
             lPitch = lPitch + (targetPitch - lPitch) * (7.5 * dt)
             cam.CFrame = CFrame.new(cam.CFrame.Position) * CFrame.Angles(math.rad(lYaw), math.rad(lPitch), 0)
         end
     end)
 end
+
 local function exitS()
-    if not isSeated then return end isSeated, d.SG.Enabled = false, false if cC then cC:Disconnect() end cC = nil stopEng()
-    driveState.forward, driveState.reverse, driveState.left, driveState.right, driveState.brake, driveState.currentSpeed = false, false, false, false, false, 0
-    if pW and pW.Parent then pW:Destroy() end pW = nil if jC then jC:Disconnect() end jC = nil
-    if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then lp.Character.HumanoidRootPart.CFrame = prim.CFrame * CFrame.new(-6, 2, 0) end
+    if not r.seatRef.isSeated then return end r.seatRef.isSeated = false d.SG.Enabled = false 
+    if r.cC then r.cC:Disconnect() end r.cC = nil r.stopEng()
+    r.driveState.forward, r.driveState.reverse, r.driveState.left, r.driveState.right, r.driveState.brake, r.driveState.currentSpeed = false, false, false, false, false, 0
+    if r.pW and r.pW.Parent then r.pW:Destroy() end r.pW = nil if r.jC then r.jC:Disconnect() end r.jC = nil
+    if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then lp.Character.HumanoidRootPart.CFrame = r.prim.CFrame * CFrame.new(-6, 2, 0) end
     local hum = lp.Character:FindFirstChildOfClass("Humanoid") if hum then hum.Sit = false end
 end
+
 local function enterS()
-    if isSeated or not lp.Character then return end local hrp, hum = lp.Character:FindFirstChild("HumanoidRootPart"), lp.Character:FindFirstChildOfClass("Humanoid")
+    if r.seatRef.isSeated or not lp.Character then return end 
+    local hrp, hum = lp.Character:FindFirstChild("HumanoidRootPart"), lp.Character:FindFirstChildOfClass("Humanoid")
     if hrp and hum and hum.Health > 0 then
-        isSeated, d.SG.Enabled = true, true hrp.CFrame, hum.Sit = prim.CFrame * CFrame.new(0.6, 2.1, -0.6), true
-        pW = Instance.new("WeldConstraint", hrp) pW.Name, pW.Part0, pW.Part1 = "ForcedSeatLock", prim, hrp enableCam() startEng()
-        jC = hum:GetPropertyChangedSignal("Jump"):Connect(function() if hum.Jump then exitS() end end)
+        r.seatRef.isSeated = true d.SG.Enabled = true hrp.CFrame, hum.Sit = r.prim.CFrame * CFrame.new(0.6, 1.4, -0.6), true
+        r.pW = Instance.new("WeldConstraint", hrp) r.pW.Name, r.pW.Part0, r.pW.Part1 = "ForcedSeatLock", r.prim, hrp 
+        enableCam() r.startEng()
+        r.jC = hum:GetPropertyChangedSignal("Jump"):Connect(function() if hum.Jump then exitS() end end)
     end
 end
-seat.Touched:Connect(function(hit) if hit.Parent == lp.Character then enterS() end end)
-sitTool.Activated:Connect(enterS)
-RS.Heartbeat:Connect(function()
-    if not mdl or not mdl.Parent then return end local cam = W.CurrentCamera
-    if isSeated and cam then
-        local cSub = cam.CameraSubject
-        if cSub and cSub:IsA("Humanoid") and cSub.Parent == lp.Character then
-            local head = lp.Character:FindFirstChild("Head")
-            if head and (cam.CFrame.Position - head.Position).Magnitude <= 1.8 then muffleEQ.HighGain, muffleEQ.MidGain = -26, -14 else muffleEQ.HighGain, muffleEQ.MidGain = 0, 0 end
-        else muffleEQ.HighGain, muffleEQ.MidGain = 0, 0 end
-    else muffleEQ.HighGain, muffleEQ.MidGain = 0, 0 end
-    if isSeated and prim and prim.Parent and not driveState.deployed then
-        local cLook = prim.CFrame.LookVector local absSp = math.abs(driveState.currentSpeed)
-        local ray = Ray.new(prim.Position, Vector3.new(0, -6, 0)) local hitPart = W:FindPartOnRayWithIgnoreList(ray, {mdl, lp.Character})
-        local isOff = false
-        if hitPart and hitPart.Material == Enum.Material.Grass then
-            isOff = true
-        end
-        local maxS = isOff and 65 or 105 local maxR = isOff and -25 or -35
-        local fFactor = math.clamp(1 - (absSp / maxS), 0.12, 1.0) local rFactor = math.clamp(1 - (absSp / math.abs(maxR)), 0.25, 1.0)
-        if driveState.brake then driveState.currentSpeed = driveState.currentSpeed > 0 and math.max(0, driveState.currentSpeed - BRAKE_FACTOR) or math.min(0, driveState.currentSpeed + BRAKE_FACTOR)
-        elseif driveState.forward and not driveState.engineKillOverride then driveState.currentSpeed = math.min(maxS, driveState.currentSpeed + (2.1 * fFactor))
-        elseif driveState.reverse and not driveState.engineKillOverride then driveState.currentSpeed = math.max(maxR, driveState.currentSpeed - (1.4 * rFactor))
-        else
-            if driveState.currentSpeed > maxS then driveState.currentSpeed = math.max(maxS, driveState.currentSpeed - 2.5)
-            elseif driveState.currentSpeed > 0 then driveState.currentSpeed = math.max(0, driveState.currentSpeed - 1.1)
-            elseif driveState.currentSpeed < maxR then driveState.currentSpeed = math.min(maxR, driveState.currentSpeed + 2.5)
-            elseif driveState.currentSpeed < 0 then driveState.currentSpeed = math.min(0, driveState.currentSpeed + 1.1) end
-        end
-        local sMod = math.clamp(1.4 - (absSp / maxS), 0.35, 1.2) if isOff then sMod = sMod * 0.8 end
-        local tTurn = 0 if absSp > 0.1 then if driveState.left then tTurn = 1.8 * sMod elseif driveState.right then tTurn = -1.8 * sMod end end
-        lv.VectorVelocity = cLook * driveState.currentSpeed av.AngularVelocity = Vector3.new(0, tTurn, 0)
-        d.ST.Text = string.format("%03d", math.abs(math.floor(driveState.currentSpeed)))
-    else if lv and av then lv.VectorVelocity, av.AngularVelocity = Vector3.zero, Vector3.zero end end
-end)
-local P, W, RS = game:GetService("Players"), game:GetService("Workspace"), game:GetService("RunService")
-local lp = P.LocalPlayer
-if not lp or not lp.Character then return end
+
+r.seat.Touched:Connect(function(hit) if hit.Parent == lp.Character then enterS() end end)
+local sitTool = lp.Backpack:FindFirstChild("Sit") or lp.Character:FindFirstChild("Sit")
+if sitTool and sitTool:IsA("Tool") then sitTool.Activated:Connect(enterS) end
+
 for _, i in ipairs(lp.Backpack:GetChildren()) do if i.Name == "Reset Interceptor" then i:Destroy() end end
 local tool = Instance.new("Tool", lp.Backpack) tool.Name = "Reset Interceptor" tool.RequiresHandle = false
 tool.Activated:Connect(function()
     local oldM = W:FindFirstChild("SpawnedStormInterceptor") if oldM then oldM:Destroy() end
     local oldU = game:GetService("CoreGui"):FindFirstChild("DominatorDriveUI") if oldU then oldU:Destroy() end
-    _G.D1DataShared = nil
-    print("Dominator 1 Reset Tracker triggered. Re-run Part 1 and Part 2 now.")
+    local soundGroup = game:GetService("SoundService"):FindFirstChild("InterceptorGroup") if soundGroup then soundGroup:Destroy() end
+    _G.D1DataShared, _G.D1EngineSharedRef, _G.D1DriveStateRef, _G.D1SeatedRef = nil, nil, nil, nil
+    print("Interceptor Reset Complete.")
+end)-- BLOCK 5: CRITICAL CORE STEERING MATRIX & RAYCAST ALIGNMENT FLUIDITY
+local d = _G.D1DataShared
+local r = _G.D1EngineSharedRef
+if not d or not r then return end
+local W, Pl, RS = workspace, game:GetService("Players"), game:GetService("RunService")
+local lp = Pl.LocalPlayer
+
+RS.Heartbeat:Connect(function(dt)
+    if not r.mdl or not r.mdl.Parent then return end local cam = W.CurrentCamera
+    
+    -- Cabin camera position processing to trigger equalization effects
+    if r.seatRef.isSeated and cam then
+        local head = lp.Character and lp.Character:FindFirstChild("Head")
+        if head and (cam.CFrame.Position - head.Position).Magnitude <= 1.8 then 
+            r.muffleEQ.HighGain, r.muffleEQ.MidGain, r.muffleEQ.LowGain = -26, -14, -4
+        else 
+            r.muffleEQ.HighGain, r.muffleEQ.MidGain, r.muffleEQ.LowGain = 0, 0, 0 
+        end
+    else 
+        r.muffleEQ.HighGain, r.muffleEQ.MidGain, r.muffleEQ.LowGain = 0, 0, 0 
+    end
+    
+    if r.seatRef.isSeated and r.prim and r.prim.Parent and not r.driveState.deployed then
+        local absSp = math.abs(r.driveState.currentSpeed)
+        local ray = Ray.new(r.prim.Position, Vector3.new(0, -6, 0)) 
+        local hitPart = W:FindPartOnRayWithIgnoreList(ray, {r.mdl, lp.Character})
+        local isOff = (hitPart and hitPart.Material == Enum.Material.Grass)
+        local maxS = isOff and 65 or 105 local maxR = isOff and -25 or -35
+        local fFactor = math.clamp(1 - (absSp / maxS), 0.12, 1.0) local rFactor = math.clamp(1 - (absSp / math.abs(maxR)), 0.25, 1.0)
+        
+        if r.driveState.brake then 
+            r.driveState.currentSpeed = r.driveState.currentSpeed > 0 and math.max(0, r.driveState.currentSpeed - r.BRAKE_FACTOR) or math.min(0, r.driveState.currentSpeed + r.BRAKE_FACTOR)
+        elseif r.driveState.forward and not r.driveState.engineKillOverride then 
+            r.driveState.currentSpeed = math.min(maxS, r.driveState.currentSpeed + (2.1 * fFactor))
+        elseif r.driveState.reverse and not r.driveState.engineKillOverride then 
+            r.driveState.currentSpeed = math.max(maxR, r.driveState.currentSpeed - (1.4 * rFactor))
+        else
+            if r.driveState.currentSpeed > maxS then r.driveState.currentSpeed = math.max(maxS, r.driveState.currentSpeed - 2.5)
+            elseif r.driveState.currentSpeed > 0 then r.driveState.currentSpeed = math.max(0, r.driveState.currentSpeed - 1.1)
+            elseif r.driveState.currentSpeed < maxR then r.driveState.currentSpeed = math.min(maxR, r.driveState.currentSpeed + 2.5)
+            elseif r.driveState.currentSpeed < 0 then r.driveState.currentSpeed = math.min(0, r.driveState.currentSpeed + 1.1) end
+        end
+        
+        local sMod = math.clamp(1.4 - (absSp / maxS), 0.35, 1.2) if isOff then sMod = sMod * 0.8 end
+        local tTurn = 0 
+        if absSp > 0.1 then 
+            if r.driveState.left then tTurn = 1.8 * sMod elseif r.driveState.right then tTurn = -1.8 * sMod end 
+        end
+        
+        r.lv.VectorVelocity = r.prim.CFrame.LookVector * r.driveState.currentSpeed 
+        r.av.AngularVelocity = Vector3.new(0, tTurn, 0)
+        d.ST.Text = string.format("%03d", math.abs(math.floor(r.driveState.currentSpeed)))
+    else 
+        if r.lv and r.av then r.lv.VectorVelocity, r.av.AngularVelocity = Vector3.zero, Vector3.zero end 
+    end
 end)
+
 task.spawn(function()
     while true do
         task.wait(0.2)
-        local sh = _G.D1DataShared
         local interceptor = W:FindFirstChild("SpawnedStormInterceptor")
-        if interceptor and sh then
-            local prim = interceptor.PrimaryPart or interceptor:FindFirstChildOfClass("BasePart")
-            local lv = prim and prim:FindFirstChild("VehicleEngine")
-            if prim and lv then
-                RS.Heartbeat:Connect(function(dt)
-                    if not prim or not prim.Parent then return end
-                    local rayO = prim.Position + Vector3.new(0, 2, 0)
-                    local rayD = Vector3.new(0, -12, 0)
-                    local params = RaycastParams.new()
-                    params.FilterDescendantsInstances = {interceptor, lp.Character}
-                    params.FilterType = Enum.RaycastFilterType.Exclude
-                    local res = W:Raycast(rayO, rayD, params)
-                    if res then
-                        local norm = res.Normal
-                        local mat = res.Material
-                        local pos = res.Position
-                        local targetH = pos.Y + 1.6
-                        local hDiff = targetH - prim.Position.Y
-                        local fwd = prim.CFrame.LookVector
-                        local rgt = fwd:Cross(norm).Unit
-                        local trueFwd = norm:Cross(rgt).Unit
-                        local targetCF = CFrame.fromMatrix(
-                            Vector3.new(prim.Position.X, prim.Position.Y + (hDiff * 0.15), prim.Position.Z),
-                            rgt, norm, -trueFwd
-                        )
-                        local incline = math.clamp(fwd:Dot(Vector3.new(0, 1, 0)), -1, 1)
-                        local slowFactor = math.clamp(1 - math.abs(incline), 0.2, 1.0)
-                        if mat == Enum.Material.Grass then
-                            if lv.VectorVelocity.Magnitude > 65 then
-                                local curSp = lv.VectorVelocity.Magnitude
-                                local smoothSp = math.max(65, curSp - (18 * dt))
-                                lv.VectorVelocity = prim.CFrame.LookVector * smoothSp * slowFactor
-                            end
-                        else
-                            local curSp = lv.VectorVelocity.Magnitude
-                            if curSp > 5 then
-                                lv.VectorVelocity = prim.CFrame.LookVector * curSp * slowFactor
-                            end
-                        end
-                        if not prim.Anchored and lv.VectorVelocity.Magnitude > 0.5 then
-                            prim.CFrame = prim.CFrame:Lerp(targetCF, 0.12)
-                        end
+        if interceptor and d and r and r.prim and r.lv then
+            RS.Heartbeat:Connect(function(dt)
+                if not r.prim or not r.prim.Parent or r.driveState.deployed or not r.seatRef.isSeated then return end
+                local rayO, rayD = r.prim.Position + Vector3.new(0, 2, 0), Vector3.new(0, -12, 0)
+                local params = RaycastParams.new()
+                params.FilterDescendantsInstances = {interceptor, lp.Character}
+                params.FilterType = Enum.RaycastFilterType.Exclude
+                local res = W:Raycast(rayO, rayD, params)
+                if res then
+                    local norm, mat, pos = res.Normal, res.Material, res.Position
+                    
+                    -- FIXED: Cross-product matrix vector isolation forces completely straight forward momentum and crisp snapping pivots
+                    local currentLook = r.prim.CFrame.LookVector
+                    local safeRight = currentLook:Cross(norm).Unit
+                    local safeLook = norm:Cross(safeRight).Unit
+                    
+                    local targetCF = CFrame.fromMatrix(
+                        Vector3.new(r.prim.Position.X, pos.Y + 1.6 + (((pos.Y + 1.6) - r.prim.Position.Y) * 0.15), r.prim.Position.Z), 
+                        safeRight, 
+                        norm, 
+                        -safeLook
+                    )
+                    
+                    local incline = math.clamp(r.prim.CFrame.LookVector:Dot(Vector3.new(0, 1, 0)), -1, 1)
+                    local slowFactor = math.clamp(1 - math.abs(incline), 0.2, 1.0)
+                    if mat == Enum.Material.Grass and r.lv.VectorVelocity.Magnitude > 65 then
+                        r.lv.VectorVelocity = r.prim.CFrame.LookVector * math.max(65, r.lv.VectorVelocity.Magnitude - (18 * dt)) * slowFactor
+                    elseif r.lv.VectorVelocity.Magnitude > 5 then
+                        r.lv.VectorVelocity = r.prim.CFrame.LookVector * r.lv.VectorVelocity.Magnitude * slowFactor
                     end
-                end)
-                break
-            end
+                    if not r.prim.Anchored and r.lv.VectorVelocity.Magnitude > 0.5 then 
+                        r.prim.CFrame = r.prim.CFrame:Lerp(targetCF, 0.12) 
+                    end
+                end
+            end)
+            break
         end
     end
 end)
-local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
-local Workspace = game:GetService("Workspace")
-
-if _G.OceanicCreditTriggered then return end
-_G.OceanicCreditTriggered = true
-
-local isMainScriptActive = _G.D1DataShared ~= nil or Workspace:FindFirstChild("SpawnedStormInterceptor") ~= nil
-
-if isMainScriptActive then
-    local notificationGui = Instance.new("ScreenGui")
-    notificationGui.Name = "OceanicNotificationUI"
-    notificationGui.ResetOnSpawn = false
-    notificationGui.Parent = CoreGui
-
-    local creditText = Instance.new("TextLabel", notificationGui)
-    creditText.Size = UDim2.new(1, 0, 0, 30)
-    creditText.Position = UDim2.new(0, 0, 1, -60)
-    creditText.BackgroundTransparency = 1
-    creditText.Text = "Script made by Oceanic enjoy lololol"
-    creditText.Font = Enum.Font.SourceSansBold
-    creditText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    creditText.TextSize = 18
-    creditText.TextStrokeTransparency = 1
-    creditText.TextTransparency = 1
-    creditText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-
-    task.spawn(function()
-        local fadeInText = TweenService:Create(creditText, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
-        local fadeInStroke = TweenService:Create(creditText, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextStrokeTransparency = 0.5})
-        
-        fadeInText:Play()
-        fadeInStroke:Play()
-        
-        task.wait(4.5)
-        
-        local fadeOutText = TweenService:Create(creditText, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1})
-        local fadeOutStroke = TweenService:Create(creditText, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextStrokeTransparency = 1})
-        
-        fadeOutText:Play()
-        fadeOutStroke:Play()
-        
-        fadeOutText.Completed:Wait()
-        notificationGui:Destroy()
-    end)
-end
