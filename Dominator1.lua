@@ -309,7 +309,7 @@ d.BDep.MouseButton1Click:Connect(function()
     if not driveState.deployed then
         d.BDep.Text, d.BDep.BackgroundColor3 = "DEPLOYING...", Color3.fromRGB(180, 100, 30) aDep:Play() prim.Anchored = true
         -- FIXED: Structural landing anchors drop down precisely 0.9 studs
-        TS:Create(prim, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = CFrame.new(prim.Position.X, prim.Position.Y - 0.9, prim.Position.Z) * (prim.CFrame - prim.CFrame.Position)}):Play() task.wait(3)
+        TS:Create(prim, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = CFrame.new(prim.Position.X, prim.Position.Y - 1, prim.Position.Z) * (prim.CFrame - prim.CFrame.Position)}):Play() task.wait(3)
         driveState.currentSpeed, lv.VectorVelocity, av.AngularVelocity = 0, Vector3.zero, Vector3.zero
         for _, p in ipairs(mdl:GetDescendants()) do if p:IsA("BasePart") then p.Anchored = true end end driveState.deployed, d.BDep.Text, d.BDep.BackgroundColor3 = true, "DEPLOYED", Color3.fromRGB(180, 30, 30)
     else
@@ -482,3 +482,50 @@ task.spawn(function()
         end
     end
 end)
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+if _G.OceanicCreditTriggered then return end
+_G.OceanicCreditTriggered = true
+
+local isMainScriptActive = _G.D1DataShared ~= nil or Workspace:FindFirstChild("SpawnedStormInterceptor") ~= nil
+
+if isMainScriptActive then
+    local notificationGui = Instance.new("ScreenGui")
+    notificationGui.Name = "OceanicNotificationUI"
+    notificationGui.ResetOnSpawn = false
+    notificationGui.Parent = CoreGui
+
+    local creditText = Instance.new("TextLabel", notificationGui)
+    creditText.Size = UDim2.new(1, 0, 0, 30)
+    creditText.Position = UDim2.new(0, 0, 1, -60)
+    creditText.BackgroundTransparency = 1
+    creditText.Text = "Script made by Oceanic enjoy lololol"
+    creditText.Font = Enum.Font.SourceSansBold
+    creditText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    creditText.TextSize = 18
+    creditText.TextStrokeTransparency = 1
+    creditText.TextTransparency = 1
+    creditText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+
+    task.spawn(function()
+        local fadeInText = TweenService:Create(creditText, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
+        local fadeInStroke = TweenService:Create(creditText, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextStrokeTransparency = 0.5})
+        
+        fadeInText:Play()
+        fadeInStroke:Play()
+        
+        task.wait(4.5)
+        
+        local fadeOutText = TweenService:Create(creditText, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1})
+        local fadeOutStroke = TweenService:Create(creditText, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextStrokeTransparency = 1})
+        
+        fadeOutText:Play()
+        fadeOutStroke:Play()
+        
+        fadeOutText.Completed:Wait()
+        notificationGui:Destroy()
+    end)
+end
+
