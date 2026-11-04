@@ -528,3 +528,57 @@ if isMainScriptActive then
         notificationGui:Destroy()
     end)
 end
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+if _G.DeltaNoticeLoaded then return end
+_G.DeltaNoticeLoaded = true
+
+local player = Players.LocalPlayer
+if not player then return end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DeltaMessageGui"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+
+if gethud then
+    screenGui.Parent = gethud()
+elseif getgui then
+    screenGui.Parent = getgui()
+elseif cloneref then
+    screenGui.Parent = cloneref(CoreGui)
+else
+    screenGui.Parent = CoreGui
+end
+
+local textLabel = Instance.new("TextLabel")
+textLabel.Name = "NotificationText"
+textLabel.Size = UDim2.new(1, 0, 0, 25)
+textLabel.Position = UDim2.new(0, 0, 1, -50)
+textLabel.BackgroundTransparency = 1
+textLabel.Text = "Sorry the script was broken for a bit I tried to update it but it broke :/"
+textLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+textLabel.Font = Enum.Font.SourceSans
+textLabel.TextSize = 15
+textLabel.TextTransparency = 1
+textLabel.TextStrokeTransparency = 1
+textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+textLabel.Parent = screenGui
+
+local tweenInfoIn = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local tweenInfoOut = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+local fadeIn = TweenService:Create(textLabel, tweenInfoIn, {TextTransparency = 0, TextStrokeTransparency = 0.3})
+local fadeOut = TweenService:Create(textLabel, tweenInfoOut, {TextTransparency = 1, TextStrokeTransparency = 1})
+
+fadeIn:Play()
+task.wait(4.5)
+fadeOut:Play()
+
+fadeOut.Completed:Connect(function()
+    screenGui:Destroy()
+    _G.DeltaNoticeLoaded = nil
+end)
+
