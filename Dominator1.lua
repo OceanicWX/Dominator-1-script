@@ -1,4 +1,4 @@
--- BLOCK 1: FRAMEWORK SETUP & MAIN DRIVING UI
+
 local MODEL_ID = 97188597374642
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
@@ -129,7 +129,7 @@ _G.D1DataShared = {
     BL = btnLeft, BR = btnRight, BB = btnBrake, BRev = btnReverse, BF = btnForward,
     BDep = btnDeploy, BLi = btnLights, BH = btnHideUI, BE = btnEngineToggle, ST = speedText
 }
--- BLOCK 2: SECURITY CONTEXT MODEL LOADING BYPASS
+
 local d = _G.D1DataShared
 if not d then return end
 local W, IS, PS = workspace, game:GetService("InsertService"), game:GetService("PhysicsService")
@@ -178,7 +178,7 @@ end)
 
 mdl.Parent = W
 mdl:PivotTo(CFrame.new(d.RP.Position) * (d.RP.CFrame - d.RP.CFrame.Position) * CFrame.new(0, 0.05, -22))
--- BLOCK 3: PHYSICAL INTERACTION, VEHICLE MECHANICS & DYNAMIC SOUND RE-ROUTING
+
 local d = _G.D1DataShared
 if not d then return end
 local W, Pl, RS, TS, SS, US = workspace, game:GetService("Players"), game:GetService("RunService"), game:GetService("TweenService"), game:GetService("SoundService"), game:GetService("UserInputService")
@@ -308,7 +308,7 @@ d.BDep.MouseButton1Click:Connect(function()
     if driveState.deployProgress then return end driveState.deployProgress = true
     if not driveState.deployed then
         d.BDep.Text, d.BDep.BackgroundColor3 = "DEPLOYING...", Color3.fromRGB(180, 100, 30) aDep:Play() prim.Anchored = true
-        -- FIXED: Structural landing anchors drop down precisely 0.9 studs
+        
         TS:Create(prim, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = CFrame.new(prim.Position.X, prim.Position.Y - 1, prim.Position.Z) * (prim.CFrame - prim.CFrame.Position)}):Play() task.wait(3)
         driveState.currentSpeed, lv.VectorVelocity, av.AngularVelocity = 0, Vector3.zero, Vector3.zero
         for _, p in ipairs(mdl:GetDescendants()) do if p:IsA("BasePart") then p.Anchored = true end end driveState.deployed, d.BDep.Text, d.BDep.BackgroundColor3 = true, "DEPLOYED", Color3.fromRGB(180, 30, 30)
@@ -324,7 +324,7 @@ _G.D1EngineSharedRef = {
 driveState = driveState, lv = lv, av = av, prim = prim, seat = seat,
 pW = pW, jC = jC, cC = cC, startEng = startEng, stopEng = stopEng,
 muffleEQ = muffleEQ, sEng = sEng, BRAKE_FACTOR = BRAKE_FACTOR, mdl = mdl, seatRef = seatRef
-}-- BLOCK 4: CAMERA LOGIC, ALIGNMENT, & RESET TRACKING
+}
 local d = _G.D1DataShared
 local r = _G.D1EngineSharedRef
 if not d or not r then return end
@@ -382,7 +382,7 @@ tool.Activated:Connect(function()
     local soundGroup = game:GetService("SoundService"):FindFirstChild("InterceptorGroup") if soundGroup then soundGroup:Destroy() end
     _G.D1DataShared, _G.D1EngineSharedRef, _G.D1DriveStateRef, _G.D1SeatedRef = nil, nil, nil, nil
     print("Interceptor Reset Complete.")
-end)-- BLOCK 5: CRITICAL CORE STEERING MATRIX & RAYCAST ALIGNMENT FLUIDITY
+end)
 local d = _G.D1DataShared
 local r = _G.D1EngineSharedRef
 if not d or not r then return end
@@ -392,7 +392,7 @@ local lp = Pl.LocalPlayer
 RS.Heartbeat:Connect(function(dt)
     if not r.mdl or not r.mdl.Parent then return end local cam = W.CurrentCamera
     
-    -- Cabin camera position processing to trigger equalization effects
+    
     if r.seatRef.isSeated and cam then
         local head = lp.Character and lp.Character:FindFirstChild("Head")
         if head and (cam.CFrame.Position - head.Position).Magnitude <= 1.8 then 
@@ -454,7 +454,7 @@ task.spawn(function()
                 if res then
                     local norm, mat, pos = res.Normal, res.Material, res.Position
                     
-                    -- FIXED: Cross-product matrix vector isolation forces completely straight forward momentum and crisp snapping pivots
+                    
                     local currentLook = r.prim.CFrame.LookVector
                     local safeRight = currentLook:Cross(norm).Unit
                     local safeLook = norm:Cross(safeRight).Unit
